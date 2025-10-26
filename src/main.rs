@@ -1,14 +1,14 @@
 use iced::{
-    widget::{container, scrollable, text, column},
-    Element, Length, Theme, Color, Background, Border, Pixels,
+    Background, Border, Color, Element, Length, Theme,
+    widget::{column, container, row, scrollable, text},
 };
 
-struct ScrollableExample;
+struct ColumnView;
 
 #[derive(Debug, Clone, Copy)]
 enum Message {}
 
-impl ScrollableExample {
+impl ColumnView {
     fn new() -> Self {
         Self
     }
@@ -18,59 +18,296 @@ impl ScrollableExample {
     }
 
     fn view(&self) -> Element<Message> {
-        // 스크롤 가능한 컨텐츠 생성
-        let content = (0..50)
-            .map(|i| text(format!("아이템 {}", i)).size(20))
-            .fold(column!(), |col, txt| col.push(txt))
-            .spacing(10);
-
-        // Scrollbar 설정으로 두께 조절
-        let vertical_scrollbar = scrollable::Scrollbar::new()
-            .width(16.0)          // 스크롤바 트랙의 너비 (두께)
-            .scroller_width(14.0) // 스크롤러(움직이는 부분)의 너비
-            .margin(2.0);         // 스크롤바와 경계 사이의 여백
-
-        let horizontal_scrollbar = scrollable::Scrollbar::new()
-            .width(12.0)          // 가로 스크롤바의 높이 (두께)
-            .scroller_width(10.0) // 가로 스크롤러의 높이
-            .margin(1.0);
-
-        // Direction으로 Scrollbar 설정
-        let direction = scrollable::Direction::Both {
-            vertical: vertical_scrollbar,
-            horizontal: horizontal_scrollbar,
-        };
-
-        // 스크롤러블 위젯 생성
-        let scrollable = scrollable::Scrollable::with_direction(content, direction)
+        // Main container that fills the entire screen
+        container(
+            row![
+                // Sidebar (left)
+                self.sidebar(),
+                // Main content area (right)
+                self.main_content()
+            ]
+                .width(Length::Fill)
+                .height(Length::Fill),
+        )
             .width(Length::Fill)
             .height(Length::Fill)
-            .style(custom_scrollbar_style); // 스타일도 함께 적용
+            .style(sidebar_container_style)
+            .into()
+    }
 
-        // 전체 화면을 채우는 컨테이너
-        container(scrollable)
+    fn sidebar(&self) -> Element<Message> {
+        // Sidebar items
+        let sidebar_items = vec![ // 기본 폰트 인코딩이 이모지 텍스트 인식 못해서 지움.
+            ("", "Recent", true),
+            ("", "Applications", false),
+            ("️", "Desktop", false),
+            ("", "Documents", false),
+            ("", "Downloads", false),
+            ("️", "Pictures", false),
+            ("", "Music", false),
+            ("", "Movies", false),
+        ];
+
+        let sidebar_content = sidebar_items
+            .into_iter()
+            .map(|(icon, label, selected)| self.sidebar_item(icon, label, selected))
+            .fold(column![].spacing(2), |col, item| col.push(item));
+
+        // Wrap the content in a scrollable container
+        let scrollable_content = container(sidebar_content)
+            .width(Length::Fill)
+            .height(Length::Shrink);
+
+        container(
+            scrollable(scrollable_content)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .style(hidden_scrollbar_style),
+        )
+            .width(200)
+            .height(Length::Fill)
+            .padding(10)
+            .style(sidebar_style)
+            .into()
+    }
+
+    fn sidebar_item<'a>(
+        &self,
+        icon: &'a str,
+        label: &'a str,
+        selected: bool,
+    ) -> Element<'a, Message> {
+        let content = row![text(icon).size(16).width(25), text(label).size(14)]
+            .spacing(8)
+            .align_y(iced::alignment::Vertical::Center);
+
+        container(content)
+            .width(Length::Fill)
+            .padding([8, 12])
+            .style(if selected {
+                selected_sidebar_item_style
+            } else {
+                sidebar_item_style
+            })
+            .into()
+    }
+
+    fn main_content(&self) -> Element<Message> {
+        // Column view data: category -> subcategory -> items
+        let columns_data = vec![
+            (
+                "Category",
+                vec![
+                    ("Design", vec!["Figma", "Sketch", "Adobe XD"]),
+                    ("Development", vec!["Visual Studio Code", "Xcode", "Android Studio"]),
+                    ("Music", vec!["Logic Pro", "Ableton Live", "GarageBand"]),
+                ],
+            ),
+            (
+                "Applications",
+                vec![
+                    ("Figma", vec!["Figma.app", "Settings", "Templates"]),
+                    ("Visual Studio Code", vec!["VS Code.app", "Extensions", "Snippets"]),
+                ],
+            ),
+        ];
+
+        let columns = columns_data
+            .into_iter()
+            .map(|(title, items)| self.column(title, items))
+            .fold(row![].spacing(8), |row, col| row.push(col));
+
+        let scrollable_content = container(columns)
+            .width(Length::Shrink) // enable horizontal scroll
+            .height(Length::Shrink);
+
+        container(
+            scrollable(scrollable_content)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .direction(scrollable::Direction::Horizontal(
+                    scrollable::Scrollbar::new().width(8.0).scroller_width(6.0),
+                ))
+                .style(thin_scrollbar_style),
+        )
             .width(Length::Fill)
             .height(Length::Fill)
             .padding(20)
+            .style(main_content_style)
+            .into()
+    }
+
+    fn column<'a>(&self, title: &'a str, items: Vec<(&'a str, Vec<&str>)>) -> Element<'a, Message> {
+        let header = container(text(title).size(16))
+            .width(Length::Fill)
+            .padding([12, 16])
+            .style(column_header_style);
+
+        let items_list = items
+            .into_iter()
+            .map(|(item, _)| self.column_item(item))
+            .fold(column![].spacing(1), |col, item| col.push(item));
+
+        let scrollable_content = container(items_list)
+            .width(Length::Fill)
+            .height(Length::Shrink);
+
+        container(
+            column![
+                header,
+                container(scrollable_content)
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .style(column_scrollable_style)
+            ]
+                .width(Length::Fill)
+                .height(Length::Fill),
+        )
+            .width(240)
+            .height(400)
+            .style(column_style)
+            .into()
+    }
+
+    fn column_item<'a>(&self, label: &'a str) -> Element<'a, Message> {
+        container(text(label).size(14))
+            .width(Length::Fill)
+            .padding([10, 16])
+            .style(column_item_style)
             .into()
     }
 }
 
-// 스크롤바 스타일 함수 (두께와 함께 색상도 커스터마이징)
-fn custom_scrollbar_style(theme: &Theme, status: scrollable::Status) -> scrollable::Style {
-    let default_style = scrollable::default(theme, status);
+// Styles using container::Style
+fn sidebar_container_style(theme: &Theme) -> container::Style {
+    let palette = theme.extended_palette();
+    container::Style {
+        background: Some(Background::Color(palette.background.weak.color)),
+        ..container::Style::default()
+    }
+}
 
-    let custom_rail = scrollable::Rail {
-        background: Some(Background::Color(Color::from_rgb(0.95, 0.95, 0.95))),
+fn sidebar_style(theme: &Theme) -> container::Style {
+    container::Style {
+        background: Some(Background::Color(Color::from_rgb(0.95, 0.95, 0.96))),
         border: Border {
-            radius: 8.0.into(),
             width: 1.0,
             color: Color::from_rgb(0.8, 0.8, 0.8),
+            ..Border::default()
+        },
+        ..container::Style::default()
+    }
+}
+
+fn sidebar_item_style(theme: &Theme) -> container::Style {
+    container::Style {
+        background: Some(Background::Color(Color::TRANSPARENT)),
+        border: Border {
+            radius: 6.0.into(),
+            ..Border::default()
+        },
+        ..container::Style::default()
+    }
+}
+
+fn selected_sidebar_item_style(theme: &Theme) -> container::Style {
+    let palette = theme.extended_palette();
+    container::Style {
+        background: Some(Background::Color(palette.primary.weak.color)),
+        border: Border {
+            radius: 6.0.into(),
+            ..Border::default()
+        },
+        ..container::Style::default()
+    }
+}
+
+fn main_content_style(theme: &Theme) -> container::Style {
+    container::Style {
+        background: Some(Background::Color(Color::WHITE)),
+        ..container::Style::default()
+    }
+}
+
+fn column_style(theme: &Theme) -> container::Style {
+    container::Style {
+        background: Some(Background::Color(Color::WHITE)),
+        border: Border {
+            width: 1.0,
+            radius: 8.0.into(),
+            color: Color::from_rgb(0.9, 0.9, 0.9),
+            ..Border::default()
+        },
+        ..container::Style::default()
+    }
+}
+
+fn column_scrollable_style(theme: &Theme) -> container::Style {
+    container::Style {
+        background: Some(Background::Color(Color::TRANSPARENT)),
+        ..container::Style::default()
+    }
+}
+
+fn column_header_style(theme: &Theme) -> container::Style {
+    container::Style {
+        background: Some(Background::Color(Color::from_rgb(0.97, 0.97, 0.97))),
+        border: Border {
+            width: 0.0,
+            color: Color::TRANSPARENT,
+            ..Border::default()
+        },
+        ..container::Style::default()
+    }
+}
+
+fn column_item_style(theme: &Theme) -> container::Style {
+    container::Style {
+        background: Some(Background::Color(Color::TRANSPARENT)),
+        border: Border {
+            radius: 8.0.into(),
+            ..Border::default()
+        },
+        ..container::Style::default()
+    }
+}
+
+// Scrollbar styles
+fn hidden_scrollbar_style(theme: &Theme, _status: scrollable::Status) -> scrollable::Style {
+    scrollable::Style {
+        container: container::Style::default(),
+        vertical_rail: scrollable::Rail {
+            background: None,
+            border: Border::default(),
+            scroller: scrollable::Scroller {
+                color: Color::TRANSPARENT,
+                border: Border::default(),
+            },
+        },
+        horizontal_rail: scrollable::Rail {
+            background: None,
+            border: Border::default(),
+            scroller: scrollable::Scroller {
+                color: Color::TRANSPARENT,
+                border: Border::default(),
+            },
+        },
+        gap: None,
+    }
+}
+
+fn thin_scrollbar_style(theme: &Theme, status: scrollable::Status) -> scrollable::Style {
+    let rail = scrollable::Rail {
+        background: Some(Background::Color(Color::from_rgb(0.95, 0.95, 0.95))),
+        border: Border {
+            radius: 3.0.into(),
+            width: 0.0,
+            color: Color::TRANSPARENT,
         },
         scroller: scrollable::Scroller {
-            color: Color::from_rgb(0.4, 0.4, 0.7),
+            color: Color::from_rgb(0.6, 0.6, 0.6),
             border: Border {
-                radius: 7.0.into(), // 스크롤러의 모서리 둥글기 (두께와 조화롭게)
+                radius: 3.0.into(),
                 width: 0.0,
                 color: Color::TRANSPARENT,
             },
@@ -79,81 +316,31 @@ fn custom_scrollbar_style(theme: &Theme, status: scrollable::Status) -> scrollab
 
     let hovered_rail = scrollable::Rail {
         scroller: scrollable::Scroller {
-            color: Color::from_rgb(0.5, 0.5, 0.8),
-            ..custom_rail.scroller
+            color: Color::from_rgb(0.4, 0.4, 0.4),
+            ..rail.scroller
         },
-        ..custom_rail
+        ..rail
     };
 
-    let dragged_rail = scrollable::Rail {
-        scroller: scrollable::Scroller {
-            color: Color::from_rgb(0.6, 0.6, 0.9),
-            ..custom_rail.scroller
+    scrollable::Style {
+        container: container::Style::default(),
+        vertical_rail: match status {
+            scrollable::Status::Hovered { .. } => hovered_rail,
+            _ => rail,
         },
-        ..custom_rail
-    };
-
-    match status {
-        scrollable::Status::Active => scrollable::Style {
-            container: default_style.container,
-            vertical_rail: custom_rail,
-            horizontal_rail: custom_rail,
-            gap: default_style.gap,
+        horizontal_rail: match status {
+            scrollable::Status::Hovered { .. } => hovered_rail,
+            _ => rail,
         },
-        scrollable::Status::Hovered {
-            is_horizontal_scrollbar_hovered,
-            is_vertical_scrollbar_hovered
-        } => {
-            let vertical_rail = if is_vertical_scrollbar_hovered {
-                hovered_rail
-            } else {
-                custom_rail
-            };
-
-            let horizontal_rail = if is_horizontal_scrollbar_hovered {
-                hovered_rail
-            } else {
-                custom_rail
-            };
-
-            scrollable::Style {
-                container: default_style.container,
-                vertical_rail,
-                horizontal_rail,
-                gap: default_style.gap,
-            }
-        },
-        scrollable::Status::Dragged {
-            is_horizontal_scrollbar_dragged,
-            is_vertical_scrollbar_dragged
-        } => {
-            let vertical_rail = if is_vertical_scrollbar_dragged {
-                dragged_rail
-            } else {
-                custom_rail
-            };
-
-            let horizontal_rail = if is_horizontal_scrollbar_dragged {
-                dragged_rail
-            } else {
-                custom_rail
-            };
-
-            scrollable::Style {
-                container: default_style.container,
-                vertical_rail,
-                horizontal_rail,
-                gap: default_style.gap,
-            }
-        },
+        gap: None,
     }
 }
 
 fn main() -> iced::Result {
-    iced::application(
-        "Iced 0.13.1 Scrollbar 두께 조절 예제",
-        ScrollableExample::update,
-        ScrollableExample::view,
-    )
-        .run_with(|| (ScrollableExample::new(), iced::Task::none()))
+    iced::application("macOS-style Column View", ColumnView::update, ColumnView::view)
+        // 이런 식으로 폰트 설정 가능, 근데 아직은 i18n 계획은 없으니 알아만 두기
+        // 참고: https://github.com/iced-rs/iced/issues/213
+        //.font(include_bytes!("../fonts/NotoSans-VariableFont_wdth,wght.ttf"))
+        //.default_font(Font::with_name("NotoSans"))
+        .run_with(|| (ColumnView::new(), iced::Task::none()))
 }
