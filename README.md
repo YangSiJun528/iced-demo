@@ -13,13 +13,13 @@ Rust 진영에서 데스트톱 앱 개발하려면 tauri, slint, iced, egui, gtk
 내가 원하던 크로스컴파일, 디자인 자유롭게, 괜찮은 성능을 고려하면 iced가 제일 나은 선택이라고 생각함.
 
 Slint 대비 장점이라면 Rust로 UI가 되어있어서 가능한 UI 설정 옵션을 IDE로 뜯어보기 쉽다는거? 그래서 문서가 좀 부족해도 바로바로 찾아볼 수 있음.
-Slint 언어가 가독성은 좋아보이는데, IDE 지원이 떨어저서 개발 경험이 좋지 않았음. 문법 자동완성도 없었고.
+Slint 언어가 가독성은 좋아보이는데, IDE 지원이 떨어저서 개발 경험이 좋지 않았음. 문법 자동완성도 없었고. + 자료형 부족. 정수형 타입이 int(4바이트)만 있었음
 
 ---
 
 이거 문서가 잘 되어있음.
-https://github.com/fogarecious/iced_tutorial/blob/main/README.md 
-
+https://github.com/fogarecious/iced_tutorial/blob/main/README.md
+https://jl710.github.io/iced-guide/index.html << 이건 안읽어보긴 함.
 ---
 
 근데 갑자기 든 생각은 Elm이야 함수형이라 괜찮았는데, Rust의 경우 view 가 이상하게 구현되거나 Message를 update에서 전부 처리하지 않아도 컴파일 시점에 못 막는거 아닌가?
@@ -41,3 +41,27 @@ Rust AST 처리하는 clippy 같은 도구 만들어서 연결하면 될 거 같
 Model이 불변이 아닌건 단점이 맞을 듯. 그리고 그냥 구조체만 관리하는 방식 같은데, 이러면 Undo 기능도 없는거 아닌가? 뭐 쓸일이 있을진 모르겠지만.  
 
 ---
+
+## 문법 메모
+
+- 함수 파라미터 이름 앞에 `_` 붙은건 본문에서 사용하지 않음을 나타냄. 시그니처 상 필요하지만 경고를 막고싶은 경우 사용. (Rust 문법인데 찾아본김에...)
+
+- 기본적인 사용법이나 레이아웃 관련된건 그냥 목차 보고 열기. 그리 복잡하진 않음.
+- 상태관리 같은건 TEA 알고있으니까 넘어가도 됨.
+- 실행하기
+  - `iced::run`: `application().run()`의 축약형. 간단한 앱용.
+  - `iced::application`: Application 인스턴스 반환. 초기화 커스터마이징 가능. 
+    - `run_with()`: 시작 시 Task 실행
+    - `theme()`: 테마 설정
+- Task
+  - 비동기 작업. 동시 작업(concurrent operations) 처리를 위해 사용. update에서 반환 타입으로 사용됨.
+  - Elm의 `Cmd Msg`와 Iced의 `Task<Message>` 가 동일한 역할이라 보면 됨.
+- Subscription
+  - 특정 이벤트 발생 시 Message로 변환하는 역할
+  - Elm의 `Sub Msg`와 `Subscription<Message>`가 동일한 역할의 타입 
+  - `listen_with()`으로 이벤트를 받고, 인자인 클로저에서 적절한 코드로 분기처리하는게 일반적인 패턴으로 보임
+- Custom Widgets
+  - 이거 유지보수나 깔끔하게 개발하려면 필요하긴 할 듯?
+  - 여기저기 쓰이는 UI 아니면 그냥 for문이 더 나으려나?
+  - 아니면 다른 예시 더 찾아보고
+    - 커스텀 위젯 구현 예시로 괜찮아보임: https://github.com/iced-rs/iced_aw
