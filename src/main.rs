@@ -1,4 +1,4 @@
-use iced::{Color, Element, Length, Task, alignment, widget::{column, container, row, scrollable, text}, Theme, Background};
+use iced::{Background, Color, Element, Length, Task, Theme, widget::{Column as WidgetColumn, Container, column, container, row, scrollable, text}, Border};
 
 fn main() -> iced::Result {
     iced::application("Column View", App::update, App::view).run_with(App::new)
@@ -60,50 +60,28 @@ impl App {
     }
 
     fn view(&self) -> Element<Message> {
-        let column_views: Vec<Element<Message>> = self.columns
+        let column_views = self
+            .columns
             .iter()
+            .map(|col| col.view())
             .map(|col| {
-                // 각 컬럼을 container로 감싸서 배경 + 패딩 + 그림자(선택) 적용
-                container(col.view())
-                    .width(200)
-                    .height(600)
-                    .style(|theme| {
-                        let bg = match theme {
-                            Theme::Dark => Color::from_rgb8(58, 58, 77),  // 밝은 다크
-                            Theme::Light => Color::from_rgb8(250, 250, 252), // 밝은 라이트
-                            _ => Color::from_rgb8(70, 70, 90),
-                        };
-                        container::Style {
-                            background: Some(Background::Color(bg)),
-                            ..container::Style::default()
-                        }
-                    })
+                container(col)
+                    .style(column_container_style)
                     .into()
             })
-            .collect();
+            .collect::<Vec<_>>();
 
         let content = scrollable(row(column_views))
             .direction(scrollable::Direction::Horizontal(
-                scrollable::Scrollbar::new().width(10).scroller_width(10).spacing(0).margin(0),
+                scrollable::Scrollbar::new().width(10).scroller_width(10),
             ))
             .width(Length::Shrink)
             .height(Length::Shrink);
 
-        // 루트 배경 (가장 어두운/밝은 배경)
         container(content)
             .width(Length::Fill)
             .height(Length::Fill)
-            .style(|theme| {
-                let bg = match theme {
-                    Theme::Dark => Color::from_rgb8(30, 30, 40),
-                    Theme::Light => Color::from_rgb8(240, 240, 245),
-                    _ => Color::from_rgb8(45, 45, 55),
-                };
-                container::Style {
-                    background: Some(Background::Color(bg)),
-                    ..container::Style::default()
-                }
-            })
+            .style(root_container_style)
             .into()
     }
 }
@@ -118,18 +96,14 @@ impl Column {
     }
 
     fn view(&self) -> Element<Message> {
-        let items: Vec<Element<Message>> =
-            self.rows.iter().map(|row_file| row_file.view()).collect();
+        let items = self.rows.iter().map(RowFile::view).collect::<Vec<_>>();
 
-        scrollable(column(items).spacing(2))
+        scrollable(WidgetColumn::with_children(items).spacing(0))
             .direction(scrollable::Direction::Vertical(
-                scrollable::Scrollbar::new()
-                    .width(10)
-                    .scroller_width(10)
-                    .spacing(0), // 항상 표시, 간격 0
+                scrollable::Scrollbar::new().width(10).scroller_width(10).spacing(0),
             ))
             .width(200)
-            .height(Length::Fill)
+            .height(600)
             .into()
     }
 }
@@ -150,10 +124,38 @@ impl RowFile {
         container(
             row![text(icon).size(16), text(name).size(14),]
                 .spacing(8)
-                .align_y(alignment::Vertical::Center),
+                .align_y(iced::alignment::Vertical::Center),
         )
-        .padding(8)
+        .padding([6, 8])
         .width(Length::Fill)
         .into()
+    }
+}
+
+// ======================
+// 스타일 함수
+// ======================
+
+fn root_container_style(theme: &Theme) -> container::Style {
+    let bg = match theme {
+        Theme::Dark => Color::from_rgb8(30, 30, 40),
+        Theme::Light => Color::from_rgb8(240, 240, 245),
+        _ => panic!("Unknown theme"),
+    };
+    container::Style {
+        background: Some(Background::Color(bg)),
+        ..container::Style::default()
+    }
+}
+
+fn column_container_style(theme: &Theme) -> container::Style {
+    let bg = match theme {
+        Theme::Dark => Color::from_rgb8(58, 58, 77),
+        Theme::Light => Color::from_rgb8(250, 250, 252),
+        _ => panic!("Unknown theme"),
+    };
+    container::Style {
+        background: Some(Background::Color(bg)),
+        ..container::Style::default()
     }
 }
