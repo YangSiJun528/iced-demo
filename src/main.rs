@@ -1,13 +1,15 @@
-use iced::widget::{text, Scrollable};
+use iced::alignment::Horizontal;
+use iced::widget::{container, text, Scrollable};
 use iced::{
-    Background, Color, Element, Length, Task, Theme,
     widget::{
-        Column as WidgetColumn, Container,
-        container::Style,
-        row,
+        container::Style, row,
         scrollable::{Direction, Scrollbar},
-    },
+        Column as WidgetColumn,
+        Container,
+    }, Background, Color, Element, Length, Task,
+    Theme,
 };
+use iced::widget::text::Wrapping;
 
 fn main() -> iced::Result {
     iced::application("Column View", App::update, App::view).run_with(App::new)
@@ -26,37 +28,37 @@ impl App {
             Self {
                 columns: vec![
                     Column::new(vec![
-                        RowFile::Dir("Documents".into()),
-                        RowFile::Dir("Downloads".into()),
-                        RowFile::Dir("Downloads".into()),
-                        RowFile::Dir("Downloads".into()),
-                        RowFile::Dir("Downloads".into()),
-                        RowFile::Dir("Downloads".into()),
-                        RowFile::Dir("Downloads".into()),
-                        RowFile::Dir("Downloads".into()),
-                        RowFile::Dir("Downloads".into()),
-                        RowFile::Dir("Downloads".into()),
-                        RowFile::File("readme.txt".into()),
+                        RowFile::Dir("12KB".into(), "Documents".into()),
+                        RowFile::Dir("124MB".into(), "Downlasdffsaoads".into()),
+                        RowFile::Dir("124MB".into(), "Downloads".into()),
+                        RowFile::Dir("124MB".into(), "Downloads".into()),
+                        RowFile::Dir("124MB".into(), "Downloads".into()),
+                        RowFile::Dir("124MB".into(), "Downloads".into()),
+                        RowFile::Dir("124MB".into(), "Downloads".into()),
+                        RowFile::Dir("124MB".into(), "Downloads".into()),
+                        RowFile::Dir("124MB".into(), "Downloads".into()),
+                        RowFile::Dir("124MB".into(), "Downloads".into()),
+                        RowFile::File("8KB".into(), "readme.txt".into()),
                     ]),
                     Column::new(vec![
-                        RowFile::Dir("Projects".into()),
-                        RowFile::File("config.json".into()),
-                        RowFile::Dir("Downloads".into()),
-                        RowFile::Dir("Downloads".into()),
-                        RowFile::Dir("Downloads".into()),
+                        RowFile::Dir("124MB".into(), "Projects".into()),
+                        RowFile::File("235 bytes".into(), "config.json".into()),
+                        RowFile::Dir("124MB".into(), "Downloads".into()),
+                        RowFile::Dir("124MB".into(), "Downloads".into()),
+                        RowFile::Dir("124MB".into(), "Downloads".into()),
                     ]),
-                    Column::new(vec![RowFile::Dir("Projects".into())]),
+                    Column::new(vec![RowFile::Dir("124MB".into(), "Projects".into())]),
                     Column::new(vec![
-                        RowFile::Dir("Projects".into()),
-                        RowFile::Dir("Downloads".into()),
-                        RowFile::Dir("Downloads".into()),
+                        RowFile::Dir("124MB".into(), "Projects".into()),
+                        RowFile::Dir("124MB".into(), "Downloads".into()),
+                        RowFile::Dir("124MB".into(), "Downloads".into()),
                     ]),
                     Column::new(vec![
-                        RowFile::Dir("Projects".into()),
-                        RowFile::File("config.json".into()),
-                        RowFile::Dir("Downloads".into()),
-                        RowFile::Dir("Downloads".into()),
-                        RowFile::Dir("Downloads".into()),
+                        RowFile::Dir("124MB".into(), "Projects".into()),
+                        RowFile::File("4KB".into(), "config.json".into()),
+                        RowFile::Dir("124MB".into(), "Downloads".into()),
+                        RowFile::Dir("124MB".into(), "Downloads".into()),
+                        RowFile::Dir("124MB".into(), "Downloads".into()),
                     ]),
                 ],
             },
@@ -114,25 +116,45 @@ impl Column {
 
 #[derive(Clone)]
 enum RowFile {
-    File(String),
-    Dir(String),
+    File(String, String),
+    Dir(String, String),
 }
 
 impl RowFile {
     fn view(&self) -> Element<Message> {
-        let (icon, name) = match self {
-            RowFile::File(name) => ("F", name),
-            RowFile::Dir(name) => ("D", name),
+        let (size, name, is_dir) = match self {
+            RowFile::File(size, name) => (size, name, false),
+            RowFile::Dir(size, name) => (size, name, true),
         };
 
-        Container::new(
-            row![text(icon).size(16), text(name).size(14)]
-                .spacing(8)
-                .align_y(iced::alignment::Vertical::Center),
+        // 고정 폭: 파일 크기
+        let size_text = Container::new(text(size).size(12))
+            .width(60) // "1111 bytes" 정도 공간 확보
+            .align_x(Horizontal::Left);
+
+        // 파일 이름 영역, 남는 공간을 채움
+        let name_text = Container::new(text(name).size(12)
+                    //.wrapping(Wrapping::None)// 줄바꿈 등 단위 변경
+                                       // https://discourse.iced.rs/t/how-to-implement-text-overflow-ellipsis-or-text-overflow-clip/1059
+                                       // 해당 이슈가 아직 해결이 안됨, 이걸 해결된 버전이 릴리즈 되지 않았음.
+                                       // 0.13.1에서는 높이 설정해서 2줄 되면 짤리는 식으로 구현해야 함.
         )
-        .padding([6, 8])
-        .width(Length::Fill)
-        .into()
+            //.clip(true)
+            .width(Length::Fill) // 남는 공간 모두 사용
+            .height(16)
+            .align_x(Horizontal::Left);
+
+        // 우측 고정: '>' 표시
+        let arrow = container(if is_dir { text(">") } else { text("") }).width(20); //⟩ 처럼 각도가 넓은걸 쓰고 싶은데, 글자로 인식을 못함.
+
+        let row = row![size_text, name_text, arrow]
+            .spacing(8)
+            .align_y(iced::Alignment::Center);
+
+        Container::new(row)
+            .padding([6, 8])
+            .width(Length::Fill)
+            .into()
     }
 }
 
