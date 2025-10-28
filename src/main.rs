@@ -1,4 +1,13 @@
-use iced::{Background, Color, Element, Length, Task, Theme, widget::{Column as WidgetColumn, Container, column, container, row, scrollable, text}, Border};
+use iced::widget::{text, Scrollable};
+use iced::{
+    Background, Color, Element, Length, Task, Theme,
+    widget::{
+        Column as WidgetColumn, Container,
+        container::Style,
+        row,
+        scrollable::{Direction, Scrollbar},
+    },
+};
 
 fn main() -> iced::Result {
     iced::application("Column View", App::update, App::view).run_with(App::new)
@@ -63,22 +72,19 @@ impl App {
         let column_views = self
             .columns
             .iter()
-            .map(|col| col.view())
             .map(|col| {
-                container(col)
+                Container::new(col.view())
                     .style(column_container_style)
                     .into()
             })
             .collect::<Vec<_>>();
 
-        let content = scrollable(row(column_views))
-            .direction(scrollable::Direction::Horizontal(
-                scrollable::Scrollbar::new().width(10).scroller_width(10),
-            ))
+        let content = Scrollable::new(row(column_views))
+            .direction(Direction::Horizontal(Scrollbar::new()))
             .width(Length::Shrink)
             .height(Length::Shrink);
 
-        container(content)
+        Container::new(content)
             .width(Length::Fill)
             .height(Length::Fill)
             .style(root_container_style)
@@ -98,10 +104,8 @@ impl Column {
     fn view(&self) -> Element<Message> {
         let items = self.rows.iter().map(RowFile::view).collect::<Vec<_>>();
 
-        scrollable(WidgetColumn::with_children(items).spacing(0))
-            .direction(scrollable::Direction::Vertical(
-                scrollable::Scrollbar::new().width(10).scroller_width(10).spacing(0),
-            ))
+        Scrollable::new(WidgetColumn::with_children(items))
+            .direction(Direction::Vertical(Scrollbar::new().spacing(0))) // Scrollbar의 spacing이 None이 아니므로 Embedded Scrollbars로 동작
             .width(200)
             .height(600)
             .into()
@@ -121,8 +125,8 @@ impl RowFile {
             RowFile::Dir(name) => ("D", name),
         };
 
-        container(
-            row![text(icon).size(16), text(name).size(14),]
+        Container::new(
+            row![text(icon).size(16), text(name).size(14)]
                 .spacing(8)
                 .align_y(iced::alignment::Vertical::Center),
         )
@@ -136,26 +140,16 @@ impl RowFile {
 // 스타일 함수
 // ======================
 
-fn root_container_style(theme: &Theme) -> container::Style {
-    let bg = match theme {
-        Theme::Dark => Color::from_rgb8(30, 30, 40),
-        Theme::Light => Color::from_rgb8(240, 240, 245),
-        _ => panic!("Unknown theme"),
-    };
-    container::Style {
-        background: Some(Background::Color(bg)),
-        ..container::Style::default()
+fn root_container_style(_theme: &Theme) -> Style {
+    Style {
+        background: Some(Background::Color(Color::from_rgb8(240, 240, 245))),
+        ..Style::default()
     }
 }
 
-fn column_container_style(theme: &Theme) -> container::Style {
-    let bg = match theme {
-        Theme::Dark => Color::from_rgb8(58, 58, 77),
-        Theme::Light => Color::from_rgb8(250, 250, 252),
-        _ => panic!("Unknown theme"),
-    };
-    container::Style {
-        background: Some(Background::Color(bg)),
-        ..container::Style::default()
+fn column_container_style(_theme: &Theme) -> Style {
+    Style {
+        background: Some(Background::Color(Color::from_rgb8(250, 250, 252))),
+        ..Style::default()
     }
 }
