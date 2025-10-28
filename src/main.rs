@@ -24,8 +24,7 @@ enum Message {
 struct App {
     columns: Vec<Column>,
     dragging_divider: Option<usize>,
-    drag_start_x: f32,
-    initial_width: f32,
+    column_start_x: f32, // 드래그 중인 컬럼의 시작 X 좌표
 }
 
 impl App {
@@ -80,8 +79,7 @@ impl App {
                     ),
                 ],
                 dragging_divider: None,
-                drag_start_x: 0.0,
-                initial_width: 0.0,
+                column_start_x: 0.0,
             },
             Task::none(),
         )
@@ -90,31 +88,29 @@ impl App {
     fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::DividerPressed(index) => {
+                // 컬럼의 시작 X 좌표 계산 (이전 컬럼들의 너비 합)
+                let mut start_x = 0.0;
+                for i in 0..index {
+                    start_x += self.columns[i].width;
+                }
+
                 self.dragging_divider = Some(index);
-                self.initial_width = self.columns[index].width;
+                self.column_start_x = start_x;
             }
             Message::DividerReleased => {
                 self.dragging_divider = None;
             }
             Message::DividerMoved(point) => {
                 if let Some(divider_index) = self.dragging_divider {
-                    // 첫 이동 시 시작점 기록
-                    if self.drag_start_x == 0.0 {
-                        self.drag_start_x = point.x;
-                        return Task::none();
-                    }
-
-                    let delta = point.x - self.drag_start_x;
+                    // 마우스 X - 컬럼 시작 X = 새 너비
+                    let new_width = point.x - self.column_start_x;
 
                     // 최소/최대 너비 제한
                     const MIN_WIDTH: f32 = 100.0;
                     const MAX_WIDTH: f32 = 600.0;
 
                     if divider_index < self.columns.len() {
-                        let new_width = (self.initial_width + delta)
-                            .max(MIN_WIDTH)
-                            .min(MAX_WIDTH);
-                        self.columns[divider_index].width = new_width;
+                        self.columns[divider_index].width = new_width.max(MIN_WIDTH).min(MAX_WIDTH);
                     }
                 }
             }
