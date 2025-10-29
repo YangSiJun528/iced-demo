@@ -144,7 +144,7 @@ impl Column {
         // 콘텐츠 오른쪽에 가짜 스크롤바 영역 추가
         let left_bar = Container::new(text(""))
             .width(3)
-            .height(600)
+            //.height(600)
             .style(|_theme: &Theme| Style {
                 background: Some(Background::Color(Color::from_rgb8(222, 111, 250))),
                 ..Style::default()
@@ -158,7 +158,7 @@ impl Column {
         // 스크롤바 오른쪽 가짜 영역
         let right_bar = Container::new(text(""))
             .width(3)
-            .height(600)
+            //.height(600)
             .style(|_theme: &Theme| Style {
                 background: Some(Background::Color(Color::from_rgb8(111, 245, 250))),
                 ..Style::default()
@@ -171,8 +171,7 @@ impl Column {
                     .scroller_width(6)
                     .spacing(0)
             ))
-            .width(Length::Fill)
-            .height(600);
+            .width(Length::Fill);
 
         row![scrollable, right_bar]
             .width(self.width + self.resize_offset)
