@@ -141,10 +141,42 @@ impl Column {
     fn view(&self) -> Element<Message> {
         let items = self.rows.iter().map(RowFile::view).collect::<Vec<_>>();
 
-        Scrollable::new(WidgetColumn::with_children(items))
-            .direction(Direction::Vertical(Scrollbar::new().width(0).scroller_width(0)))
-            .width(self.width + self.resize_offset)
+        // 콘텐츠 오른쪽에 가짜 스크롤바 영역 추가
+        let left_bar = Container::new(text(""))
+            .width(3)
             .height(600)
+            .style(|_theme: &Theme| Style {
+                background: Some(Background::Color(Color::from_rgb8(222, 111, 250))),
+                ..Style::default()
+            });
+
+        let content_with_bar = row![
+            WidgetColumn::with_children(items),
+            left_bar
+        ].spacing(0);
+
+        // 스크롤바 오른쪽 가짜 영역
+        let right_bar = Container::new(text(""))
+            .width(3)
+            .height(600)
+            .style(|_theme: &Theme| Style {
+                background: Some(Background::Color(Color::from_rgb8(111, 245, 250))),
+                ..Style::default()
+            });
+
+        let scrollable = Scrollable::new(content_with_bar)
+            .direction(Direction::Vertical(
+                Scrollbar::new()
+                    .width(8)
+                    .scroller_width(6)
+                    .spacing(0)
+            ))
+            .width(Length::Fill)
+            .height(600);
+
+        row![scrollable, right_bar]
+            .width(self.width + self.resize_offset)
+            .spacing(0)
             .into()
     }
 
@@ -205,8 +237,8 @@ mod divider {
     use iced_core::widget::{self, Widget};
     use iced_core::{event, mouse, overlay, renderer, Background, Border, Clipboard, Color, Element, Length, Point, Rectangle, Shell, Size};
 
-    const VISUAL_WIDTH: f32 = 3.0;
-    const INTERACTION_WIDTH: f32 = 8.0;
+    const VISUAL_WIDTH: f32 = 1.0;
+    const INTERACTION_WIDTH: f32 = 2.0;
 
     const COLOR_DEFAULT: Color = Color::from_rgba(0.5, 0.5, 0.5, 0.2);     // 회색, 20% 투명도
     const COLOR_HOVER: Color = Color::from_rgba(0.6, 0.6, 0.8, 0.35);      // 연한 파랑, 35% 투명도
