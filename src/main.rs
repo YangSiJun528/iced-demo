@@ -1,12 +1,12 @@
 use iced::alignment::Horizontal;
 use iced::widget::{Scrollable, container, text};
 use iced::{Background, Color, Element, Length, Task, Theme,
-    widget::{
-        Column as WidgetColumn, Container,
-        container::Style,
-        row,
-        scrollable::{Direction, Scrollbar},
-    },
+           widget::{
+               Column as WidgetColumn, Container,
+               container::Style,
+               row,
+               scrollable::{Direction, Scrollbar},
+           },
 };
 
 fn main() -> iced::Result {
@@ -107,10 +107,10 @@ impl App {
         }
 
         let content = Scrollable::new(row(column_views))
-            .direction(Direction::Horizontal(Scrollbar::new()))
+            .direction(Direction::Horizontal(Scrollbar::new().spacing(0)))
             .width(Length::Shrink)
             .height(Length::Shrink)
-            .spacing(0); // 스크롤바 항상 활성화
+            .spacing(0);
 
         Container::new(content)
             .width(Length::Fill)
@@ -142,7 +142,7 @@ impl Column {
         let items = self.rows.iter().map(RowFile::view).collect::<Vec<_>>();
 
         Scrollable::new(WidgetColumn::with_children(items))
-            .direction(Direction::Vertical(Scrollbar::new().spacing(0)))
+            .direction(Direction::Vertical(Scrollbar::new().width(0).scroller_width(0)))
             .width(self.width + self.resize_offset)
             .height(600)
             .into()
@@ -200,11 +200,17 @@ fn root_container_style(_theme: &Theme) -> Style {
 }
 
 mod divider {
-    //Refence: https://github.com/tarkah/iced_table
     use iced_core::layout::{self, Layout};
     use iced_core::mouse::Cursor;
     use iced_core::widget::{self, Widget};
     use iced_core::{event, mouse, overlay, renderer, Background, Border, Clipboard, Color, Element, Length, Point, Rectangle, Shell, Size};
+
+    const VISUAL_WIDTH: f32 = 3.0;
+    const INTERACTION_WIDTH: f32 = 8.0;
+
+    const COLOR_DEFAULT: Color = Color::from_rgba(0.5, 0.5, 0.5, 0.2);     // 회색, 20% 투명도
+    const COLOR_HOVER: Color = Color::from_rgba(0.6, 0.6, 0.8, 0.35);      // 연한 파랑, 35% 투명도
+    const COLOR_DRAGGING: Color = Color::from_rgba(0.3, 0.4, 0.9, 0.5);    // 진한 파랑, 50% 투명도
 
     #[derive(Debug, Clone, Copy, Default)]
     struct State {
@@ -240,24 +246,24 @@ mod divider {
             }
         }
 
-        fn divider_bounds(&self, bounds: Rectangle) -> Rectangle {
-            const HANDLE_WIDTH: f32 = 24.0;
-            const HANDLE_HEIGHT: f32 = 24.0;
+        // 상호작용 영역 (넓음)
+        fn interaction_bounds(&self, bounds: Rectangle) -> Rectangle {
             Rectangle {
-                x: bounds.x + bounds.width - HANDLE_WIDTH,
-                y: bounds.y + bounds.height - HANDLE_HEIGHT,
-                width: HANDLE_WIDTH,
-                height: HANDLE_HEIGHT,
+                x: bounds.x + bounds.width - INTERACTION_WIDTH / 2.0,
+                y: bounds.y,
+                width: INTERACTION_WIDTH,
+                height: bounds.height,
             }
         }
 
-        fn hover_bounds(&self, divider_bounds: Rectangle) -> Rectangle {
-            let mut bounds = divider_bounds;
-            bounds.x -= 2.0;
-            bounds.width += 4.0;
-            bounds.y -= 2.0;
-            bounds.height += 4.0;
-            bounds
+        // 시각적 표시 영역 (좁음)
+        fn visual_bounds(&self, bounds: Rectangle) -> Rectangle {
+            Rectangle {
+                x: bounds.x + bounds.width - VISUAL_WIDTH / 2.0,
+                y: bounds.y,
+                width: VISUAL_WIDTH,
+                height: bounds.height,
+            }
         }
     }
 
@@ -265,7 +271,7 @@ mod divider {
     for Divider<'a, Message, Theme, Renderer>
     where
         Message: Clone,
-        Renderer: renderer::Renderer + iced_core::text::Renderer<Font = iced::Font>,
+        Renderer: renderer::Renderer,
     {
         fn tag(&self) -> widget::tree::Tag {
             widget::tree::Tag::of::<State>()
@@ -310,19 +316,17 @@ mod divider {
             viewport: &Rectangle,
         ) -> event::Status {
             let state = tree.state.downcast_mut::<State>();
-
             let bounds = layout.bounds();
-            let divider_bounds = self.divider_bounds(bounds);
-            let hover_bounds = self.hover_bounds(divider_bounds);
+            let interaction_bounds = self.interaction_bounds(bounds); // 변경
 
-            state.is_hovered = cursor.is_over(hover_bounds);
+            state.is_hovered = cursor.is_over(interaction_bounds);
 
             let mut status = event::Status::Ignored;
 
             if let event::Event::Mouse(mouse_event) = event {
                 match mouse_event {
                     mouse::Event::ButtonPressed(mouse::Button::Left) => {
-                        if cursor.is_over(hover_bounds) {
+                        if cursor.is_over(interaction_bounds) {
                             if let Some(position) = cursor.position() {
                                 state.drag_origin = Some(position);
                                 status = event::Status::Captured;
@@ -372,8 +376,10 @@ mod divider {
             renderer: &Renderer,
         ) -> mouse::Interaction {
             let state = tree.state.downcast_ref::<State>();
+            let bounds = layout.bounds();
+            let interaction_bounds = self.interaction_bounds(bounds); // 변경
 
-            if state.drag_origin.is_some() || state.is_hovered {
+            if state.drag_origin.is_some() || cursor.is_over(interaction_bounds) {
                 mouse::Interaction::ResizingHorizontally
             } else {
                 self.content.as_widget().mouse_interaction(
@@ -406,46 +412,30 @@ mod divider {
                 viewport,
             );
 
-            // Draw the divider handle
+            let state = tree.state.downcast_ref::<State>();
             let bounds = layout.bounds();
-            let divider_bounds = self.divider_bounds(bounds);
+            let interaction_bounds = self.interaction_bounds(bounds);
+            let visual_bounds = self.visual_bounds(bounds);
 
-            // Background quad
-            renderer.fill_quad(
-                renderer::Quad {
-                    bounds: divider_bounds,
-                    border: Border {
-                        radius: 2.0.into(),
-                        ..Default::default()
-                    },
-                    shadow: Default::default(),
-                },
-                Background::Color(Color::from_rgb8(180, 180, 190)),
-            );
+            // draw 시점에 직접 호버 확인
+            let is_hovered = cursor.is_over(interaction_bounds);
+            let is_dragging = state.drag_origin.is_some();
 
-            // Text "||"
-            let text_bounds = Rectangle {
-                x: divider_bounds.x + 6.0,
-                y: divider_bounds.y + 4.0,
-                width: divider_bounds.width - 12.0,
-                height: divider_bounds.height - 8.0,
+            let color = if is_dragging {
+                COLOR_DRAGGING
+            } else if is_hovered {
+                COLOR_HOVER
+            } else {
+                COLOR_DEFAULT
             };
 
-            renderer.fill_text(
-                iced_core::text::Text {
-                    content: "||".parse().unwrap(),
-                    bounds: Size::new(text_bounds.width, text_bounds.height),
-                    size: iced::Pixels(14.0),
-                    font: iced::Font::DEFAULT,
-                    horizontal_alignment: iced::alignment::Horizontal::Center,
-                    vertical_alignment: iced::alignment::Vertical::Center,
-                    line_height: iced_core::text::LineHeight::default(),
-                    shaping: iced_core::text::Shaping::Basic,
-                    wrapping: Default::default(),
+            renderer.fill_quad(
+                renderer::Quad {
+                    bounds: visual_bounds,
+                    border: Border::default(),
+                    shadow: Default::default(),
                 },
-                text_bounds.position(),
-                Color::BLACK,
-                *viewport,
+                Background::Color(color),
             );
         }
 
@@ -469,7 +459,7 @@ mod divider {
     for Element<'a, Message, Theme, Renderer>
     where
         Message: Clone + 'a,
-        Renderer: renderer::Renderer + iced_core::text::Renderer<Font = iced::Font> + 'a,
+        Renderer: renderer::Renderer + 'a,
         Theme: 'a,
     {
         fn from(divider: Divider<'a, Message, Theme, Renderer>) -> Self {
