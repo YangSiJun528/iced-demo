@@ -1,13 +1,12 @@
 use iced::alignment::Horizontal;
-use iced::widget::{container, text, Scrollable, mouse_area, stack};
-use iced::{
+use iced::widget::{Scrollable, container, text};
+use iced::{Background, Color, Element, Length, Task, Theme,
     widget::{
-        container::Style, row,
+        Column as WidgetColumn, Container,
+        container::Style,
+        row,
         scrollable::{Direction, Scrollbar},
-        Column as WidgetColumn,
-        Container,
     },
-    Background, Color, Element, Length, Task, Theme, Point, Border, Alignment,
 };
 
 fn main() -> iced::Result {
@@ -16,15 +15,12 @@ fn main() -> iced::Result {
 
 #[derive(Debug, Clone)]
 enum Message {
-    DividerPressed(usize),
-    DividerReleased,
-    DividerMoved(Point),
+    DividerDragged(usize, f32),
+    DividerReleased(usize),
 }
 
 struct App {
     columns: Vec<Column>,
-    dragging_divider: Option<usize>,
-    column_start_x: f32, // 드래그 중인 컬럼의 시작 X 좌표
 }
 
 impl App {
@@ -78,8 +74,6 @@ impl App {
                         ],
                     ),
                 ],
-                dragging_divider: None,
-                column_start_x: 0.0,
             },
             Task::none(),
         )
@@ -87,31 +81,18 @@ impl App {
 
     fn update(&mut self, message: Message) -> Task<Message> {
         match message {
-            Message::DividerPressed(index) => {
-                // 컬럼의 시작 X 좌표 계산 (이전 컬럼들의 너비 합)
-                let mut start_x = 0.0;
-                for i in 0..index {
-                    start_x += self.columns[i].width;
+            Message::DividerDragged(index, delta) => {
+                if index < self.columns.len() {
+                    let col = &mut self.columns[index];
+                    let new_width = (col.width + delta).max(MIN_WIDTH).min(MAX_WIDTH);
+                    col.resize_offset = new_width - col.width;
                 }
-
-                self.dragging_divider = Some(index);
-                self.column_start_x = start_x;
             }
-            Message::DividerReleased => {
-                self.dragging_divider = None;
-            }
-            Message::DividerMoved(point) => {
-                if let Some(divider_index) = self.dragging_divider {
-                    // 마우스 X - 컬럼 시작 X = 새 너비
-                    let new_width = point.x - self.column_start_x;
-
-                    // 최소/최대 너비 제한
-                    const MIN_WIDTH: f32 = 100.0;
-                    const MAX_WIDTH: f32 = 600.0;
-
-                    if divider_index < self.columns.len() {
-                        self.columns[divider_index].width = new_width.max(MIN_WIDTH).min(MAX_WIDTH);
-                    }
+            Message::DividerReleased(index) => {
+                if index < self.columns.len() {
+                    let col = &mut self.columns[index];
+                    col.width += col.resize_offset;
+                    col.resize_offset = 0.0;
                 }
             }
         }
@@ -122,50 +103,39 @@ impl App {
         let mut column_views = Vec::new();
 
         for (i, col) in self.columns.iter().enumerate() {
-            // 마지막 컬럼이 아니면 구분선 포함한 컬럼 뷰 생성
-            if i < self.columns.len() - 1 {
-                column_views.push(col.view_with_divider(i));
-            } else {
-                // 마지막 컬럼은 구분선 없이
-                column_views.push(
-                    Container::new(col.view())
-                        .style(column_container_style)
-                        .into(),
-                );
-            }
+            column_views.push(col.view_with_divider(i));
         }
 
         let content = Scrollable::new(row(column_views))
             .direction(Direction::Horizontal(Scrollbar::new()))
             .width(Length::Shrink)
-            .height(Length::Shrink);
+            .height(Length::Shrink)
+            .spacing(0); // 스크롤바 항상 활성화
 
-        let inner = Container::new(content)
+        Container::new(content)
             .width(Length::Fill)
             .height(Length::Fill)
-            .style(root_container_style);
-
-        // 전역 mouse_area로 감싸서 전체 화면에서 마우스 이벤트 감지
-        let mut global_area = mouse_area(inner)
-            .on_release(Message::DividerReleased);
-
-        // 드래그 중일 때만 move 이벤트 등록
-        if self.dragging_divider.is_some() {
-            global_area = global_area.on_move(Message::DividerMoved);
-        }
-
-        global_area.into()
+            .style(root_container_style)
+            .into()
     }
 }
 
+const MIN_WIDTH: f32 = 100.0;
+const MAX_WIDTH: f32 = 600.0;
+
 struct Column {
     width: f32,
+    resize_offset: f32,
     rows: Vec<RowFile>,
 }
 
 impl Column {
     fn new(width: f32, rows: Vec<RowFile>) -> Self {
-        Self { width, rows }
+        Self {
+            width,
+            resize_offset: 0.0,
+            rows,
+        }
     }
 
     fn view(&self) -> Element<Message> {
@@ -173,33 +143,17 @@ impl Column {
 
         Scrollable::new(WidgetColumn::with_children(items))
             .direction(Direction::Vertical(Scrollbar::new().spacing(0)))
-            .width(self.width)
+            .width(self.width + self.resize_offset)
             .height(600)
             .into()
     }
 
     fn view_with_divider(&self, index: usize) -> Element<Message> {
-        let content = self.view();
-
-        // 구분선 버튼 (우측 하단 고정)
-        let divider = Container::new(
-            mouse_area(
-                Container::new(text("||").size(14))
-                    .padding([4, 6])
-                    .style(divider_style),
-            )
-                .on_press(Message::DividerPressed(index)),
-        )
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .align_x(Alignment::End)
-            .align_y(Alignment::End);
-
-        // stack으로 컬럼 내용과 구분선 버튼을 겹침
-        Container::new(stack![content, divider])
-            .width(self.width)
-            .style(column_container_style)
-            .into()
+        divider::Divider::new(
+            self.view(),
+            move |delta| Message::DividerDragged(index, delta),
+            Message::DividerReleased(index),
+        ).into()
     }
 }
 
@@ -245,20 +199,281 @@ fn root_container_style(_theme: &Theme) -> Style {
     }
 }
 
-fn column_container_style(_theme: &Theme) -> Style {
-    Style {
-        background: Some(Background::Color(Color::from_rgb8(250, 250, 252))),
-        ..Style::default()
-    }
-}
+mod divider {
+    //Refence: https://github.com/tarkah/iced_table
+    use iced_core::layout::{self, Layout};
+    use iced_core::mouse::Cursor;
+    use iced_core::widget::{self, Widget};
+    use iced_core::{event, mouse, overlay, renderer, Background, Border, Clipboard, Color, Element, Length, Point, Rectangle, Shell, Size};
 
-fn divider_style(_theme: &Theme) -> Style {
-    Style {
-        background: Some(Background::Color(Color::from_rgb8(180, 180, 190))),
-        border: Border {
-            radius: 2.0.into(),
-            ..Default::default()
-        },
-        ..Style::default()
+    #[derive(Debug, Clone, Copy, Default)]
+    struct State {
+        drag_origin: Option<Point>,
+        is_hovered: bool,
+    }
+
+    pub struct Divider<'a, Message, Theme, Renderer>
+    where
+        Renderer: renderer::Renderer,
+    {
+        content: Element<'a, Message, Theme, Renderer>,
+        on_drag: Box<dyn Fn(f32) -> Message + 'a>,
+        on_release: Message,
+    }
+
+    impl<'a, Message, Theme, Renderer> Divider<'a, Message, Theme, Renderer>
+    where
+        Renderer: renderer::Renderer,
+    {
+        pub fn new<F>(
+            content: Element<'a, Message, Theme, Renderer>,
+            on_drag: F,
+            on_release: Message,
+        ) -> Self
+        where
+            F: Fn(f32) -> Message + 'a,
+        {
+            Self {
+                content,
+                on_drag: Box::new(on_drag),
+                on_release,
+            }
+        }
+
+        fn divider_bounds(&self, bounds: Rectangle) -> Rectangle {
+            const HANDLE_WIDTH: f32 = 24.0;
+            const HANDLE_HEIGHT: f32 = 24.0;
+            Rectangle {
+                x: bounds.x + bounds.width - HANDLE_WIDTH,
+                y: bounds.y + bounds.height - HANDLE_HEIGHT,
+                width: HANDLE_WIDTH,
+                height: HANDLE_HEIGHT,
+            }
+        }
+
+        fn hover_bounds(&self, divider_bounds: Rectangle) -> Rectangle {
+            let mut bounds = divider_bounds;
+            bounds.x -= 2.0;
+            bounds.width += 4.0;
+            bounds.y -= 2.0;
+            bounds.height += 4.0;
+            bounds
+        }
+    }
+
+    impl<'a, Message, Theme, Renderer> Widget<Message, Theme, Renderer>
+    for Divider<'a, Message, Theme, Renderer>
+    where
+        Message: Clone,
+        Renderer: renderer::Renderer + iced_core::text::Renderer<Font = iced::Font>,
+    {
+        fn tag(&self) -> widget::tree::Tag {
+            widget::tree::Tag::of::<State>()
+        }
+
+        fn state(&self) -> widget::tree::State {
+            widget::tree::State::new(State::default())
+        }
+
+        fn children(&self) -> Vec<widget::Tree> {
+            vec![widget::Tree::new(&self.content)]
+        }
+
+        fn diff(&self, tree: &mut widget::Tree) {
+            tree.diff_children(&[&self.content]);
+        }
+
+        fn size(&self) -> Size<Length> {
+            self.content.as_widget().size()
+        }
+
+        fn layout(
+            &self,
+            tree: &mut widget::Tree,
+            renderer: &Renderer,
+            limits: &layout::Limits,
+        ) -> layout::Node {
+            self.content
+                .as_widget()
+                .layout(&mut tree.children[0], renderer, limits)
+        }
+
+        fn on_event(
+            &mut self,
+            tree: &mut widget::Tree,
+            event: event::Event,
+            layout: Layout<'_>,
+            cursor: Cursor,
+            renderer: &Renderer,
+            clipboard: &mut dyn Clipboard,
+            shell: &mut Shell<'_, Message>,
+            viewport: &Rectangle,
+        ) -> event::Status {
+            let state = tree.state.downcast_mut::<State>();
+
+            let bounds = layout.bounds();
+            let divider_bounds = self.divider_bounds(bounds);
+            let hover_bounds = self.hover_bounds(divider_bounds);
+
+            state.is_hovered = cursor.is_over(hover_bounds);
+
+            let mut status = event::Status::Ignored;
+
+            if let event::Event::Mouse(mouse_event) = event {
+                match mouse_event {
+                    mouse::Event::ButtonPressed(mouse::Button::Left) => {
+                        if cursor.is_over(hover_bounds) {
+                            if let Some(position) = cursor.position() {
+                                state.drag_origin = Some(position);
+                                status = event::Status::Captured;
+                            }
+                        }
+                    }
+                    mouse::Event::ButtonReleased(mouse::Button::Left) => {
+                        if state.drag_origin.is_some() {
+                            state.drag_origin = None;
+                            shell.publish(self.on_release.clone());
+                            status = event::Status::Captured;
+                        }
+                    }
+                    mouse::Event::CursorMoved { .. } => {
+                        if let Some(position) = cursor.position() {
+                            if let Some(origin) = state.drag_origin {
+                                let delta = position.x - origin.x;
+                                shell.publish((self.on_drag)(delta));
+                                status = event::Status::Captured;
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+
+            let content_status = self.content.as_widget_mut().on_event(
+                &mut tree.children[0],
+                event,
+                layout,
+                cursor,
+                renderer,
+                clipboard,
+                shell,
+                viewport,
+            );
+
+            status.merge(content_status)
+        }
+
+        fn mouse_interaction(
+            &self,
+            tree: &widget::Tree,
+            layout: Layout<'_>,
+            cursor: Cursor,
+            viewport: &Rectangle,
+            renderer: &Renderer,
+        ) -> mouse::Interaction {
+            let state = tree.state.downcast_ref::<State>();
+
+            if state.drag_origin.is_some() || state.is_hovered {
+                mouse::Interaction::ResizingHorizontally
+            } else {
+                self.content.as_widget().mouse_interaction(
+                    &tree.children[0],
+                    layout,
+                    cursor,
+                    viewport,
+                    renderer,
+                )
+            }
+        }
+
+        fn draw(
+            &self,
+            tree: &widget::Tree,
+            renderer: &mut Renderer,
+            theme: &Theme,
+            r_style: &renderer::Style,
+            layout: Layout<'_>,
+            cursor: Cursor,
+            viewport: &Rectangle,
+        ) {
+            self.content.as_widget().draw(
+                &tree.children[0],
+                renderer,
+                theme,
+                r_style,
+                layout,
+                cursor,
+                viewport,
+            );
+
+            // Draw the divider handle
+            let bounds = layout.bounds();
+            let divider_bounds = self.divider_bounds(bounds);
+
+            // Background quad
+            renderer.fill_quad(
+                renderer::Quad {
+                    bounds: divider_bounds,
+                    border: Border {
+                        radius: 2.0.into(),
+                        ..Default::default()
+                    },
+                    shadow: Default::default(),
+                },
+                Background::Color(Color::from_rgb8(180, 180, 190)),
+            );
+
+            // Text "||"
+            let text_bounds = Rectangle {
+                x: divider_bounds.x + 6.0,
+                y: divider_bounds.y + 4.0,
+                width: divider_bounds.width - 12.0,
+                height: divider_bounds.height - 8.0,
+            };
+
+            renderer.fill_text(
+                iced_core::text::Text {
+                    content: "||".parse().unwrap(),
+                    bounds: Size::new(text_bounds.width, text_bounds.height),
+                    size: iced::Pixels(14.0),
+                    font: iced::Font::DEFAULT,
+                    horizontal_alignment: iced::alignment::Horizontal::Center,
+                    vertical_alignment: iced::alignment::Vertical::Center,
+                    line_height: iced_core::text::LineHeight::default(),
+                    shaping: iced_core::text::Shaping::Basic,
+                    wrapping: Default::default(),
+                },
+                text_bounds.position(),
+                Color::BLACK,
+                *viewport,
+            );
+        }
+
+        fn overlay<'b>(
+            &'b mut self,
+            tree: &'b mut widget::Tree,
+            layout: Layout<'_>,
+            renderer: &Renderer,
+            translation: iced_core::Vector,
+        ) -> Option<overlay::Element<'_, Message, Theme, Renderer>> {
+            self.content.as_widget_mut().overlay(
+                &mut tree.children[0],
+                layout,
+                renderer,
+                translation,
+            )
+        }
+    }
+
+    impl<'a, Message, Theme, Renderer> From<Divider<'a, Message, Theme, Renderer>>
+    for Element<'a, Message, Theme, Renderer>
+    where
+        Message: Clone + 'a,
+        Renderer: renderer::Renderer + iced_core::text::Renderer<Font = iced::Font> + 'a,
+        Theme: 'a,
+    {
+        fn from(divider: Divider<'a, Message, Theme, Renderer>) -> Self {
+            Element::new(divider)
+        }
     }
 }
